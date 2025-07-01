@@ -9,7 +9,8 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            overflow: hidden;
+            /* Allow vertical scrolling on mobile while preventing horizontal scroll */
+            overflow-x: hidden;
         }
         /* Custom styles for the pointer */
         .pointer {
@@ -41,7 +42,8 @@
     <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         <!-- Left Column: Controls & Text Input -->
-        <div class="lg:col-span-1 bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col space-y-4">
+        <!-- UPDATED: Added order classes for responsive layout -->
+        <div class="lg:col-span-1 bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col space-y-4 order-2 lg:order-1">
             <h2 class="text-2xl font-semibold mb-2">Enter Items</h2>
             <p class="text-sm text-gray-400 mb-2">Enter one item per line. Use the button below to share your wheel!</p>
             <textarea id="optionsInput" class="w-full h-48 lg:h-64 bg-gray-900 border-2 border-gray-700 rounded-lg p-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors" placeholder="Pizza&#10;Tacos&#10;Sushi&#10;Burger&#10;Salad&#10;Pasta"></textarea>
@@ -56,7 +58,8 @@
         </div>
 
         <!-- Right Column: Wheel & Spin Button -->
-        <div class="lg:col-span-2 flex flex-col items-center justify-center space-y-6">
+        <!-- UPDATED: Added order classes for responsive layout -->
+        <div class="lg:col-span-2 flex flex-col items-center justify-center space-y-6 order-1 lg:order-2">
             <div class="relative w-full max-w-md md:max-w-lg aspect-square flex items-center justify-center">
                 <!-- Pointer Arrow -->
                 <div class="pointer absolute top-0 left-1/2 -translate-x-1/2 -mt-2"></div>
@@ -327,6 +330,8 @@
             function setDefaultOptions() {
                 optionsInput.value = "Pizza\nTacos\nSushi\nBurger\nSalad\nPasta";
             }
+
+
 
             // Event Listeners
             optionsInput.addEventListener('input', handleInputChange);
