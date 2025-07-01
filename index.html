@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spin The Wheel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        /* Custom styles for the pointer */
+        .pointer {
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid #f59e0b; /* amber-500 */
+            z-index: 10;
+        }
+        /* Custom transition for the modal */
+        #winnerModal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        #winnerModal.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        /* Style for the copy feedback message */
+        #copyFeedback {
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center min-h-screen p-4">
+
+    <h1 class="text-4xl md:text-5xl font-bold text-center mb-6 text-white shadow-lg">Spin The Wheel</h1>
+
+    <div class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        <!-- Left Column: Controls & Text Input -->
+        <div class="lg:col-span-1 bg-gray-800 p-6 rounded-2xl shadow-2xl flex flex-col space-y-4">
+            <h2 class="text-2xl font-semibold mb-2">Enter Items</h2>
+            <p class="text-sm text-gray-400 mb-2">Enter one item per line. Use the button below to share your wheel!</p>
+            <textarea id="optionsInput" class="w-full h-48 lg:h-64 bg-gray-900 border-2 border-gray-700 rounded-lg p-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors" placeholder="Pizza&#10;Tacos&#10;Sushi&#10;Burger&#10;Salad&#10;Pasta"></textarea>
+            
+            <div class="pt-4">
+                <button id="copyLinkButton" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg cursor-pointer transition-transform transform hover:scale-105 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></svg>
+                    Copy Share Link
+                </button>
+                <p id="copyFeedback" class="text-center text-green-400 mt-2 h-5 opacity-0">Link Copied!</p>
+            </div>
+        </div>
+
+        <!-- Right Column: Wheel & Spin Button -->
+        <div class="lg:col-span-2 flex flex-col items-center justify-center space-y-6">
+            <div class="relative w-full max-w-md md:max-w-lg aspect-square flex items-center justify-center">
+                <!-- Pointer Arrow -->
+                <div class="pointer absolute top-0 left-1/2 -translate-x-1/2 -mt-2"></div>
+                
+                <!-- Canvas for the wheel -->
+                <canvas id="wheelCanvas" class="w-full h-full"></canvas>
+            </div>
+            <button id="spinButton" class="w-full max-w-xs bg-indigo-600 hover:bg-indigo-700 text-white text-xl font-bold py-4 px-6 rounded-full shadow-lg transition-all duration-200 ease-in-out transform hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100">
+                SPIN!
+            </button>
+        </div>
+    </div>
+
+    <!-- Winner Modal -->
+    <div id="winnerModal" class="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4 hidden">
+        <div id="winnerModalContent" class="bg-white text-gray-900 rounded-2xl p-8 md:p-12 text-center shadow-2xl transform scale-95 transition-transform duration-300">
+            <h2 class="text-2xl font-bold text-gray-500 mb-2">The Winner Is...</h2>
+            <p id="winnerText" class="text-4xl md:text-6xl font-extrabold text-indigo-600 my-4"></p>
+            <button id="closeModalButton" class="mt-6 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-transform transform hover:scale-105">Spin Again</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM Elements
+            const canvas = document.getElementById('wheelCanvas');
+            const ctx = canvas.getContext('2d');
+            const optionsInput = document.getElementById('optionsInput');
+            const spinButton = document.getElementById('spinButton');
+            const copyLinkButton = document.getElementById('copyLinkButton');
+            const copyFeedback = document.getElementById('copyFeedback');
+            const winnerModal = document.getElementById('winnerModal');
+            const winnerModalContent = document.getElementById('winnerModalContent');
+            const winnerText = document.getElementById('winnerText');
+            const closeModalButton = document.getElementById('closeModalButton');
+
+            // Wheel State
+            let options = [];
+            let startAngle = 0;
+            let arc = 0;
+            let spinTimeout = null;
+            let spinAngleStart = 0;
+            let spinTime = 0;
+            let spinTimeTotal = 0;
+            let isSpinning = false;
+            let drawWheelTimeout;
+            
+            // On window resize, adjust canvas and redraw
+            window.addEventListener('resize', resizeCanvas, false);
+
+            function resizeCanvas() {
+                const container = canvas.parentElement;
+                if (!container) return;
+                const size = Math.min(container.clientWidth, container.clientHeight);
+                canvas.width = size * window.devicePixelRatio;
+                canvas.height = size * window.devicePixelRatio;
+                canvas.style.width = `${size}px`;
+                canvas.style.height = `${size}px`;
+                drawWheel();
+            }
+
+            // Function to generate a color palette
+            const palette = ["#8b5cf6", "#ec4899", "#34d399", "#f59e0b", "#3b82f6", "#ef4444", "#10b981", "#6366f1", "#d946ef", "#f97316"];
+            
+            const getColor = (index) => palette[index % palette.length];
+
+            // Main function to draw the wheel
+            function drawWheel() {
+                if (!canvas.getContext) return;
+                
+                const size = canvas.width;
+                const outsideRadius = size / 2 - (size * 0.05);
+                const textRadius = outsideRadius * 0.70; // Adjusted text radius for better spacing
+                const insideRadius = 0;
+                const centerX = size / 2;
+                const centerY = size / 2;
+                
+                options = optionsInput.value.split('\n').filter(opt => opt.trim() !== '');
+                arc = options.length > 0 ? (2 * Math.PI) / options.length : 0;
+                
+                spinButton.disabled = options.length < 2;
+
+                ctx.clearRect(0, 0, size, size);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+
+                if (options.length === 0) {
+                     ctx.fillStyle = 'gray';
+                     ctx.textAlign = 'center';
+                     ctx.textBaseline = 'middle';
+                     ctx.font = `bold ${Math.max(12, size / 25)}px Inter, sans-serif`;
+                     ctx.fillText('Add items to build the wheel!', centerX, centerY);
+                     return;
+                }
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(startAngle);
+                ctx.translate(-centerX, -centerY);
+
+                for (let i = 0; i < options.length; i++) {
+                    const angle = i * arc;
+                    ctx.fillStyle = getColor(i);
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, outsideRadius, angle, angle + arc, false);
+                    ctx.arc(centerX, centerY, insideRadius, angle + arc, angle, true);
+                    ctx.stroke();
+                    ctx.fill();
+
+                    ctx.save();
+                    // --- UPDATED: DYNAMIC FONT SIZING TO AVOID TRUNCATION ---
+                    ctx.fillStyle = "white";
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    
+                    // Move origin to the text's position and rotate the context
+                    ctx.translate(centerX + Math.cos(angle + arc / 2) * textRadius,
+                                  centerY + Math.sin(angle + arc / 2) * textRadius);
+                    ctx.rotate(angle + arc / 2 + Math.PI / 2);
+
+                    const text = options[i];
+                    
+                    // 1. Calculate the maximum allowed width for the text based on segment size.
+                    const maxTextWidth = (2 * textRadius * Math.sin(arc / 2)) * 0.9; // Use 90% for padding
+
+                    // 2. Calculate an initial dynamic font size.
+                    let fontSize = Math.min(
+                        size / 15, // General cap based on canvas size
+                        (outsideRadius / options.length) * 1.5, // Scale with segment "height"
+                        30 // An absolute max font size
+                    );
+                    
+                    // 3. Reduce font size until text fits. This avoids truncation.
+                    const minFontSize = 6; // Set a hard limit for minimum font size for readability
+                    ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+
+                    while (ctx.measureText(text).width > maxTextWidth && fontSize > minFontSize) {
+                        fontSize -= 1; // Decrease font size by 1px
+                        ctx.font = `bold ${fontSize}px Inter, sans-serif`;
+                    }
+                    
+                    // 4. Draw the perfectly centered (and auto-sized) text.
+                    ctx.fillText(text, 0, 0);
+                    ctx.restore();
+                }
+                 ctx.restore();
+            }
+
+            // Spin functionality
+            function spin() {
+                if (isSpinning) return;
+                isSpinning = true;
+                spinAngleStart = Math.random() * 10 + 10;
+                spinTime = 0;
+                spinTimeTotal = Math.random() * 3000 + 4000;
+                rotateWheel();
+            }
+
+            function rotateWheel() {
+                spinTime += 30;
+                if (spinTime >= spinTimeTotal) {
+                    stopRotateWheel();
+                    return;
+                }
+                const spinAngle = spinAngleStart - easeOut(spinTime, 0, spinAngleStart, spinTimeTotal);
+                startAngle += (spinAngle * Math.PI / 180);
+                drawWheel();
+                spinTimeout = setTimeout(rotateWheel, 30);
+            }
+
+            function stopRotateWheel() {
+                clearTimeout(spinTimeout);
+                const degrees = startAngle * 180 / Math.PI + 90;
+                const arcd = arc * 180 / Math.PI;
+                const index = Math.floor((360 - degrees % 360) / arcd);
+                const winner = options[index];
+                
+                if(winner) showWinner(winner);
+                isSpinning = false;
+            }
+
+            // Easing function
+            function easeOut(t, b, c, d) {
+                const ts = (t /= d) * t;
+                const tc = ts * t;
+                return b + c * (tc + -3 * ts + 3 * t);
+            }
+            
+            // Modal controls
+            function showWinner(winner) {
+                winnerText.textContent = winner;
+                winnerModal.classList.remove('hidden');
+                setTimeout(() => winnerModalContent.style.transform = 'scale(1)', 10);
+            }
+
+            function hideWinner() {
+                winnerModalContent.style.transform = 'scale(0.95)';
+                winnerModal.classList.add('hidden');
+            }
+            
+            // --- URL Sharing Functionality ---
+
+            function loadOptionsFromURL() {
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const encodedOptions = urlParams.get('options');
+                    if (encodedOptions) {
+                        const decoded = atob(encodedOptions);
+                        optionsInput.value = decoded;
+                    } else {
+                        setDefaultOptions();
+                    }
+                } catch (e) {
+                    console.error("Error loading options from URL, setting defaults.", e);
+                    setDefaultOptions();
+                }
+            }
+
+            function handleInputChange() {
+                clearTimeout(drawWheelTimeout);
+                drawWheelTimeout = setTimeout(() => {
+                    drawWheel();
+                }, 300); 
+            }
+            
+            function copyLink() {
+                const text = optionsInput.value;
+                if (!text.trim()) {
+                    const shareUrl = window.location.origin + window.location.pathname;
+                    fallbackCopyToClipboard(shareUrl);
+                    return;
+                }
+                
+                const encodedOptions = btoa(text);
+                const shareUrl = `${window.location.origin}${window.location.pathname}?options=${encodedOptions}`;
+                
+                fallbackCopyToClipboard(shareUrl);
+            }
+            
+            function fallbackCopyToClipboard(text) {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.top = "0";
+                textArea.style.left = "0";
+                textArea.style.position = "fixed";
+
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+
+                try {
+                    const successful = document.execCommand('copy');
+                    if (successful) {
+                       copyFeedback.classList.remove('opacity-0');
+                       setTimeout(() => copyFeedback.classList.add('opacity-0'), 2000);
+                    } else {
+                        console.error('Fallback: Copying text command was unsuccessful');
+                        alert('Failed to copy link.');
+                    }
+                } catch (err) {
+                    console.error('Fallback: Oops, unable to copy', err);
+                    alert('Failed to copy link.');
+                }
+
+                document.body.removeChild(textArea);
+            }
+
+            function setDefaultOptions() {
+                optionsInput.value = "Pizza\nTacos\nSushi\nBurger\nSalad\nPasta";
+            }
+
+            // Event Listeners
+            optionsInput.addEventListener('input', handleInputChange);
+            spinButton.addEventListener('click', spin);
+            copyLinkButton.addEventListener('click', copyLink);
+            closeModalButton.addEventListener('click', hideWinner);
+            winnerModal.addEventListener('click', e => (e.target === winnerModal) && hideWinner());
+
+            // Initial setup
+            loadOptionsFromURL();
+            resizeCanvas();
+        });
+    </script>
+</body>
+</html>
